@@ -66,6 +66,7 @@ show_blockchain_info()
 show_wallet_balance("alice")
 list_transactions("alice")
 
+
 txs = rpc("listtransactions", ["*", 1], wallet="alice")
 if txs['result']:
     txid = txs['result'][0]['txid']
@@ -73,3 +74,37 @@ if txs['result']:
     decode_transaction(txid)
 
 show_block()
+
+ 
+def show_utxo_set(wallet_name, min_confirmations=0):
+    """
+    List all unspent outputs for a wallet.
+    Uses listunspent which returns each UTXO with its txid, vout index,
+    address, amount, and confirmation count.
+    """
+    try:
+        rpc("loadwallet", [wallet_name])
+    except:
+        pass
+ 
+    utxos = rpc("listunspent", [min_confirmations, 9999999], wallet=wallet_name)['result']
+ 
+    print(f"\n=== UTXO set: {wallet_name} ===")
+    if not utxos:
+        print("  No unspent outputs found.")
+        return
+ 
+    total = 0.0
+    for u in utxos:
+        confs = u['confirmations']
+        status = "confirmed" if confs > 0 else "unconfirmed"
+        print(f"  txid : {u['txid'][:32]}...")
+        print(f"  vout : {u['vout']}")
+        print(f"  addr : {u['address']}")
+        print(f"  amt  : {u['amount']:.8f} BTC  ({confs} confs, {status})")
+        print()
+        total += u['amount']
+ 
+    print(f"  Total spendable: {total:.8f} BTC across {len(utxos)} UTXO(s)")
+ 
+show_utxo_set("alice")
