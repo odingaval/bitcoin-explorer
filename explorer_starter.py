@@ -108,3 +108,52 @@ def show_utxo_set(wallet_name, min_confirmations=0):
     print(f"  Total spendable: {total:.8f} BTC across {len(utxos)} UTXO(s)")
  
 show_utxo_set("alice")
+
+def show_block_fees(blockhash=None):
+    """
+    Calculate total fees collected in a block.
+ 
+    Strategy: for every non-coinbase transaction, sum(inputs) - sum(outputs)
+    is the fee. We fetch each raw tx with verbosity=2 so Bitcoin Core resolves
+    the previous outputs inline, avoiding a second RPC call per input.
+    """
+    if blockhash is None:
+        blockhash = rpc("getbestblockhash")['result']
+ 
+    # verbosity=2 returns the full block with decoded transactions
+    block = rpc("getblock", [blockhash, 2])['result']
+ 
+    print(f"\n=== Fees in block #{block['height']} ===")
+    print(f"Hash : {block['hash'][:32]}...")
+    print(f"Txns : {block['nTx']}")
+ 
+    total_fees = 0.0
+    tx_fees = []
+ 
+    for tx in block['tx']:
+        # skip coinbase — it has no inputs spending previous outputs
+        if 'coinbase' in tx['vin'][0]:
+            continue
+ 
+        input_total = sum(
+            vin['prevout']['value']
+            for vin in tx['vin']
+            if 'prevout' in vin          # verbosity=2 attaches prevout
+        )
+        output_total = sum(vout['value'] for vout in tx['vout'])
+        fee = input_total - output_total
+ 
+        if fee >= 0:                     # guard against rounding artefacts
+            total_fees += fee
+            tx_fees.append((tx['txid'], fee))
+ 
+    # print top-5 fee payers
+    tx_fees.sort(key=lambda x: x[1], reverse=True)
+    print("\n  Top fee-paying transactions:")
+    for txid, fee in tx_fees[:5]:
+        print(f"  {txid[:32]}...  {fee:.8f} BTC")
+ 
+    print(f"\n  Total fees collected : {total_fees:.8f} BTC")
+    print(f"  Average fee per tx   : {total_fees / max(len(tx_fees), 1):.8f} BTC")
+
+show_block_fees()
